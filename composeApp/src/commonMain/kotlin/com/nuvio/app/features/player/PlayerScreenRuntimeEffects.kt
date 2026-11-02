@@ -650,55 +650,63 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
         nextEpisodeCardDismissed = false
         cancelNextEpisodeAutoPlay()
 
-        val season = activeSeasonNumber
-        val episode = activeEpisodeNumber
         val vid = activeVideoId
+        val vidParts = vid?.split(':')
+        val parsedSeason = if (vidParts != null && vidParts.size >= 3) {
+            vidParts[vidParts.size - 2].toIntOrNull()
+        } else null
+        val parsedEpisode = if (vidParts != null && vidParts.size >= 3) {
+            vidParts[vidParts.size - 1].toIntOrNull()
+        } else null
+
+        val season = activeSeasonNumber ?: parsedSeason
+        val episode = activeEpisodeNumber ?: parsedEpisode
+
         if (!playerSettingsUiState.skipIntroEnabled) return@LaunchedEffect
         if ((contentType ?: parentMetaType).equals("movie", ignoreCase = true)) {
             skipIntervals = SkipIntroRepository.getMovieSkipIntervals(parentMetaId, vid)
             return@LaunchedEffect
         }
-        if (season == null || episode == null || vid == null) return@LaunchedEffect
-        // Skip intervals come from remote providers: pointless to look them up without a network.
-        if (isNetworkOffline()) return@LaunchedEffect
 
         launch {
             // Bounded so a slow provider never stalls the player.
-            val intervals = withTimeoutOrNull(SKIP_INTERVAL_RESOLVE_TIMEOUT_MS) {
-                var imdbFromContent = parentMetaId.takeIf { it.startsWith("tt") }
-                    ?: (metaUiState.meta ?: playerMeta)
-                        ?.takeIf { it.id == parentMetaId }
-                        ?.imdbId
-                        ?.takeIf { it.startsWith("tt") }
-                    ?: vid.substringBefore(':').takeIf { it.startsWith("tt") }
+            val intervals = if (!isNetworkOffline() && season != null && episode != null && vid != null) {
+                withTimeoutOrNull(SKIP_INTERVAL_RESOLVE_TIMEOUT_MS) {
+                    var imdbFromContent = parentMetaId.takeIf { it.startsWith("tt") }
+                        ?: (metaUiState.meta ?: playerMeta)
+                            ?.takeIf { it.id == parentMetaId }
+                            ?.imdbId
+                            ?.takeIf { it.startsWith("tt") }
+                        ?: vid.substringBefore(':').takeIf { it.startsWith("tt") }
 
-                if (imdbFromContent == null) {
-                    val rawId = parentMetaId.removePrefix("tmdb:").removePrefix("series:").removePrefix("movie:").trim()
-                    val numId = rawId.toIntOrNull()
-                        ?: vid.substringBefore(':').removePrefix("tmdb:").removePrefix("series:").trim().toIntOrNull()
-                    if (numId != null) {
-                        imdbFromContent = runCatching {
-                            TmdbService.tmdbToImdb(numId, "tv")
-                        }.getOrNull()
+                    if (imdbFromContent == null) {
+                        val rawId = parentMetaId.removePrefix("tmdb:").removePrefix("series:").removePrefix("movie:").trim()
+                        val numId = rawId.toIntOrNull()
+                            ?: vid.removePrefix("tmdb:").removePrefix("series:").removePrefix("movie:").substringBefore(':').trim().toIntOrNull()
+                        if (numId != null) {
+                            imdbFromContent = runCatching {
+                                TmdbService.tmdbToImdb(numId, "tv")
+                            }.getOrNull()
+                        }
                     }
-                }
 
-                when {
-                    vid.startsWith("mal:") -> {
-                        val malId = vid.removePrefix("mal:").substringBefore(':')
-                        SkipIntroRepository.getSkipIntervalsForMal(malId = malId, episode = episode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
+                    when {
+                        vid.startsWith("mal:") -> {
+                            val malId = vid.removePrefix("mal:").substringBefore(':')
+                            SkipIntroRepository.getSkipIntervalsForMal(malId = malId, episode = episode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
+                        }
+                        vid.startsWith("kitsu:") -> {
+                            val kitsuId = vid.removePrefix("kitsu:").substringBefore(':')
+                            SkipIntroRepository.getSkipIntervalsForKitsu(kitsuId = kitsuId, episode = episode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
+                        }
+                        else -> SkipIntroRepository.getSkipIntervals(
+                            imdbId = imdbFromContent,
+                            season = season,
+                            episode = episode,
+                        )
                     }
-                    vid.startsWith("kitsu:") -> {
-                        val kitsuId = vid.removePrefix("kitsu:").substringBefore(':')
-                        SkipIntroRepository.getSkipIntervalsForKitsu(kitsuId = kitsuId, episode = episode, imdbId = imdbFromContent, imdbSeason = season, imdbEpisode = episode)
-                    }
-                    else -> SkipIntroRepository.getSkipIntervals(
-                        imdbId = imdbFromContent,
-                        season = season,
-                        episode = episode,
-                    )
-                }
-            } ?: emptyList()
+                } ?: emptyList()
+            } else emptyList()
 
             var finalIntervals = intervals
             if (finalIntervals.isEmpty()) {
@@ -719,7 +727,7 @@ private fun PlayerScreenRuntime.BindPlayerMetadataAndSkipEffects() {
                             provider = "chapter",
                         ),
                     )
-                } else {
+                } else if (season != null || !contentType.equals("movie", ignoreCase = true)) {
                     // Smart fallback for series: Standard TV intro interval allows skipping introductory recaps/openings on uncataloged streams.
                     finalIntervals = listOf(
                         SkipInterval(

@@ -57,11 +57,11 @@ fun SkipIntroButton(
     modifier: Modifier = Modifier,
     skipsToPostCredits: Boolean = false,
 ) {
-    var lastType by remember { mutableStateOf(interval?.type) }
+    var lastType by remember { mutableStateOf(interval?.type ?: "intro") }
     var lastSkipsToPostCredits by remember { mutableStateOf(skipsToPostCredits) }
-    val canSkip = interval?.internalSkipAction(emptyList()) != null
-    if (canSkip) {
-        lastType = interval?.type
+    val canSkip = interval != null && interval.internalSkipAction(emptyList()) != null
+    if (canSkip && interval != null) {
+        lastType = interval.type
         lastSkipsToPostCredits = skipsToPostCredits
     }
     val isVisible = canSkip && (!dismissed || controlsVisible)

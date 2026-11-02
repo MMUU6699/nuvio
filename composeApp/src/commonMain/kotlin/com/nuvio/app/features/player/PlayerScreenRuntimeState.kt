@@ -247,7 +247,7 @@ internal class PlayerScreenRuntime(
     var serverAudioPreferenceKey: String? = null
     var subtitleTracks by mutableStateOf<List<SubtitleTrack>>(emptyList())
     var videoQualityTracks by mutableStateOf<List<VideoQualityTrack>>(emptyList())
-    var selectedVideoQualityHeight by mutableStateOf(1080)
+    var selectedVideoQualityHeight by mutableStateOf(Int.MAX_VALUE)
     var selectedAudioIndex by mutableStateOf(-1)
     var selectedSubtitleIndex by mutableStateOf(-1)
     var selectedAddonSubtitleId by mutableStateOf<String?>(null)

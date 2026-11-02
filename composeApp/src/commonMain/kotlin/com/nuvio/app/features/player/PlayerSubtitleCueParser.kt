@@ -325,7 +325,11 @@ object PlayerSubtitleCueParser {
     private fun normalizeCueText(text: String): String {
         return text
             .replace(Regex("""<(?:\d+:)?\d{1,2}:\d{2}(?:[.,]\d+)?>"""), "")
+            .replace(Regex("""\{[^}]*\}"""), "")
             .replace(Regex("""</?[a-zA-Z0-9._-]+(?: [^>]*)?>"""), "")
+            .replace("\\N", "\n")
+            .replace("\\n", "\n")
+            .replace("\\h", " ")
             .replace("&nbsp;", " ")
             .replace("&amp;", "&")
             .replace("&lt;", "<")

@@ -60,7 +60,7 @@ data class PlayerSettingsUiState(
     val androidLibmpvYuv420pEnabled: Boolean = false,
     val androidExoChaptersEnabled: Boolean = false,
     val decoderPriority: Int = 1,
-    val mapDV7ToHevc: Boolean = false,
+    val mapDV7ToHevc: Boolean = true,
     val tunnelingEnabled: Boolean = false,
     val exoNativeMemoryEnabled: Boolean = false,
     val bufferEngineEnabled: Boolean = false,
@@ -146,7 +146,7 @@ object PlayerSettingsRepository {
     private var androidLibmpvYuv420pEnabled = false
     private var androidExoChaptersEnabled = false
     private var decoderPriority = 1
-    private var mapDV7ToHevc = false
+    private var mapDV7ToHevc = true
     private var tunnelingEnabled = false
     private var exoNativeMemoryEnabled = false
     private var bufferEngineEnabled = false
@@ -237,7 +237,7 @@ object PlayerSettingsRepository {
         androidLibmpvYuv420pEnabled = false
         androidExoChaptersEnabled = false
         decoderPriority = 1
-        mapDV7ToHevc = false
+        mapDV7ToHevc = true
         tunnelingEnabled = false
         exoNativeMemoryEnabled = false
         bufferEngineEnabled = false
@@ -360,7 +360,7 @@ object PlayerSettingsRepository {
         androidLibmpvYuv420pEnabled = PlayerSettingsStorage.loadAndroidLibmpvYuv420pEnabled() ?: false
         androidExoChaptersEnabled = PlayerSettingsStorage.loadAndroidExoChaptersEnabled() ?: false
         decoderPriority = PlayerSettingsStorage.loadDecoderPriority() ?: 1
-        mapDV7ToHevc = PlayerSettingsStorage.loadMapDV7ToHevc() ?: false
+        mapDV7ToHevc = PlayerSettingsStorage.loadMapDV7ToHevc() ?: true
         tunnelingEnabled = PlayerSettingsStorage.loadTunnelingEnabled() ?: false
         exoNativeMemoryEnabled = (PlayerSettingsStorage.loadExoNativeMemoryEnabled() ?: false) &&
             isExoNativeMemorySupported()

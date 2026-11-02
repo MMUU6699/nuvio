@@ -92,4 +92,35 @@ class PlayerSubtitleUtilsTest {
         assertEquals(4500L, cues.single().endTimeMs)
         assertEquals("Hello\nworld", cues.single().text)
     }
+
+    @Test
+    fun testSubtitleSdhFilterArabicNoiseAndSpeakerLabels() {
+        // Arabic SDH in parentheses and brackets
+        val text1 = "[نباح الكلاب]\n(طقطقة الماء)\nمرحباً بك"
+        assertEquals("مرحباً بك", SubtitleSdhFilter.filter(text1))
+
+        // Arabic speaker name followed by colon
+        val text2 = "الشخص يقول : كيف حالك؟"
+        assertEquals("كيف حالك؟", SubtitleSdhFilter.filter(text2))
+
+        // Dialogue dash with speaker label
+        val text3 = "- أحمد: أين أنت الآن؟\n- سارة: أنا في البيت"
+        assertEquals("- أين أنت الآن؟\n- أنا في البيت", SubtitleSdhFilter.filter(text3))
+
+        // Music notes and asterisks
+        val text4 = "♪ موسيقى هادئة ♪\n*صراخ*\nأسرع!"
+        assertEquals("أسرع!", SubtitleSdhFilter.filter(text4))
+
+        // ASS tags and formatting
+        val text5 = "{\\an8}أهلاً بكم في البرنامج"
+        assertEquals("أهلاً بكم في البرنامج", SubtitleSdhFilter.filter(text5))
+
+        // English location header in Arabic subtitle
+        val text6 = "LONDON, ENGLAND\nوصلنا إلى لندن"
+        assertEquals("وصلنا إلى لندن", SubtitleSdhFilter.filter(text6))
+
+        // Subtitle only containing noise should return null
+        val noiseOnly = "[صوت رعد]\n(نباح الكلاب)\n♪♪♪"
+        assertEquals(null, SubtitleSdhFilter.filter(noiseOnly))
+    }
 }

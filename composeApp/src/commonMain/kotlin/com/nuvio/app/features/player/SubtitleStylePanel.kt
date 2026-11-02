@@ -126,12 +126,29 @@ fun SubtitleStylePanel(
             )
         }
 
+        SubtitleStyleSection(title = "تنظيف الترجمة (إزالة المؤثرات الصوتية والأسماء)") {
+            SubtitleToggleChip(
+                enabled = style.stripSdh,
+                onClick = { onStyleChanged(style.copy(stripSdh = !style.stripSdh)) },
+            )
+        }
+
         SubtitleStyleSection(title = stringResource(Res.string.compose_player_color)) {
             SubtitleColorPicker(
                 colors = SubtitleColorSwatches,
                 selectedColor = style.textColor,
                 onColorSelected = { color ->
                     onStyleChanged(style.copy(textColor = color.copy(alpha = style.textColor.alpha)))
+                },
+            )
+        }
+
+        SubtitleStyleSection(title = "خلفية الترجمة والشفافية") {
+            SubtitleColorPicker(
+                colors = SubtitleBackgroundColorSwatches,
+                selectedColor = style.backgroundColor,
+                onColorSelected = { color ->
+                    onStyleChanged(style.copy(backgroundColor = color))
                 },
             )
         }
@@ -315,19 +332,28 @@ private fun SubtitleColorPicker(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         colors.forEach { color ->
-            val selected = sameRgb(color, selectedColor)
+            val selected = sameColorWithAlpha(color, selectedColor)
             Box(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(color)
+                    .background(if (color.alpha == 0f) Color.White.copy(alpha = 0.08f) else color)
                     .border(
                         width = 2.dp,
                         color = if (selected) Color.White else Color.White.copy(alpha = 0.22f),
                         shape = CircleShape,
                     )
                     .clickable(onClick = { onColorSelected(color) }),
-            )
+                contentAlignment = Alignment.Center,
+            ) {
+                if (color.alpha == 0f) {
+                    Text(
+                        text = "∅",
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
         }
     }
 }
@@ -462,6 +488,14 @@ private fun SubtitleHelperText(text: String) {
         style = MaterialTheme.typography.bodySmall,
     )
 }
+
+private fun sameColorWithAlpha(first: Color, second: Color): Boolean =
+    abs(first.alpha - second.alpha) < 0.05f &&
+        (first.alpha < 0.05f || (
+            abs(first.red - second.red) < 0.02f &&
+            abs(first.green - second.green) < 0.02f &&
+            abs(first.blue - second.blue) < 0.02f
+        ))
 
 private fun sameRgb(first: Color, second: Color): Boolean =
     abs(first.red - second.red) < 0.01f &&

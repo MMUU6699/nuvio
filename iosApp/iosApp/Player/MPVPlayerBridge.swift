@@ -522,6 +522,11 @@ final class MPVPlayerViewController: UIViewController {
         var layerPointer = Int64(Int(bitPattern: Unmanaged.passUnretained(metalLayer).toOpaque()))
         checkError(mpv_set_option(mpv, "wid", MPV_FORMAT_INT64, &layerPointer))
         checkError(mpv_set_option_string(mpv, "vo", "gpu-next"))
+        checkError(mpv_set_option_string(mpv, "profile", "gpu-hq"))
+        checkError(mpv_set_option_string(mpv, "scale", "spline36"))
+        checkError(mpv_set_option_string(mpv, "cscale", "spline36"))
+        checkError(mpv_set_option_string(mpv, "deband", "yes"))
+        checkError(mpv_set_option_string(mpv, "sub-codepage", "auto:cp1256:utf-8"))
         checkError(mpv_set_option_string(mpv, "gpu-api", "vulkan"))
         checkError(mpv_set_option_string(mpv, "gpu-context", "moltenvk"))
         checkError(mpv_set_option_string(mpv, "hwdec", "videotoolbox"))
@@ -576,7 +581,8 @@ final class MPVPlayerViewController: UIViewController {
         fontDirectory.withCString { path in
             checkError(mpv_set_option_string(mpv, "sub-fonts-dir", path))
         }
-        checkError(mpv_set_option_string(mpv, "sub-font", "Noto Sans CJK SC"))
+        checkError(mpv_set_option_string(mpv, "sub-font", "Geeza Pro, Arial, Noto Sans CJK SC, sans-serif"))
+        checkError(mpv_set_option_string(mpv, "sub-font-provider", "coretext"))
         print("[MPV] Using bundled CJK subtitle font: \(fontURL.lastPathComponent)")
     }
 

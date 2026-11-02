@@ -149,7 +149,7 @@ internal fun BoxScope.PlayerPlaybackOverlays(
     )
 
     if (!playerControlsLocked) {
-        val canShowInterval = (initialLoadCompleted || playbackSnapshot.isPlaying || playbackSnapshot.positionMs > 0L) && !pausedOverlayVisible
+        val canShowInterval = initialLoadCompleted || playbackSnapshot.isPlaying || playbackSnapshot.positionMs > 0L
         SkipIntroButton(
             interval = if (canShowInterval) activeSkipInterval else null,
             skipsToPostCredits = skipsToPostCredits,

@@ -348,7 +348,8 @@ internal fun parseSidecarTimedCuesRobust(rawText: String, sourceUrl: String): Si
     for (mime in candidates) {
         val parsed = parseSidecarTimedCuesWithMime(cleaned, mime)
         if (parsed.isNotEmpty()) {
-            val fixed = PlayerSubtitleRtlFix.fixTimedCues(parsed, isBuiltInSubtitle = false)
+            val sdhFiltered = filterSidecarSdhCues(parsed)
+            val fixed = PlayerSubtitleRtlFix.fixTimedCues(sdhFiltered, isBuiltInSubtitle = false)
             val normalized = if (mime == MimeTypes.TEXT_VTT) normalizeTimedCuePositions(fixed) else fixed
             return SidecarParseResult(
                 normalized,
@@ -365,7 +366,8 @@ internal fun parseSidecarTimedCuesRobust(rawText: String, sourceUrl: String): Si
         parseSidecarTimedCuesLenient(cleaned, sourceUrl)
     }
     if (lenient.isNotEmpty()) {
-        val fixed = PlayerSubtitleRtlFix.fixTimedCues(lenient, isBuiltInSubtitle = false)
+        val sdhFiltered = filterSidecarSdhCues(lenient)
+        val fixed = PlayerSubtitleRtlFix.fixTimedCues(sdhFiltered, isBuiltInSubtitle = false)
         val normalized = if (sniffedMime == MimeTypes.TEXT_VTT) normalizeTimedCuePositions(fixed) else fixed
         return SidecarParseResult(
             normalized,
@@ -379,6 +381,34 @@ internal fun parseSidecarTimedCuesRobust(rawText: String, sourceUrl: String): Si
         effectiveMime = candidates.firstOrNull() ?: MimeTypes.APPLICATION_SUBRIP,
         source = "none"
     )
+}
+
+private fun filterSidecarSdhCues(cues: List<CuesWithTiming>): List<CuesWithTiming> {
+    val result = ArrayList<CuesWithTiming>(cues.size)
+    for (entry in cues) {
+        val modifiedCues = ArrayList<Cue>(entry.cues.size)
+        for (cue in entry.cues) {
+            val text = cue.text?.toString()
+            if (text == null) {
+                modifiedCues.add(cue)
+                continue
+            }
+            val filtered = SubtitleSdhFilter.filter(text)
+            if (filtered != null) {
+                modifiedCues.add(if (filtered == text) cue else cue.buildUpon().setText(filtered).build())
+            }
+        }
+        if (modifiedCues.isNotEmpty()) {
+            val durationUs = when {
+                entry.durationUs != C.TIME_UNSET -> entry.durationUs
+                entry.endTimeUs != C.TIME_UNSET && entry.startTimeUs != C.TIME_UNSET ->
+                    (entry.endTimeUs - entry.startTimeUs).coerceAtLeast(1L)
+                else -> 5_000_000L
+            }
+            result.add(CuesWithTiming(modifiedCues, entry.startTimeUs, durationUs))
+        }
+    }
+    return result
 }
 
 private fun normalizeTimedCuePositions(cues: List<CuesWithTiming>): List<CuesWithTiming> {

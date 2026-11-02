@@ -192,10 +192,10 @@ private fun readResponseBody(body: ResponseBody?): String {
     if (body == null) return ""
     val bytes = body.bytes()
     return runCatching {
+        com.nuvio.app.features.autosync.SubtitleCharsetDetector.decode(bytes)
+    }.getOrElse {
         val charset = body.contentType()?.charset(Charsets.UTF_8) ?: Charsets.UTF_8
         String(bytes, charset)
-    }.getOrElse {
-        String(bytes, Charsets.UTF_8)
     }
 }
 

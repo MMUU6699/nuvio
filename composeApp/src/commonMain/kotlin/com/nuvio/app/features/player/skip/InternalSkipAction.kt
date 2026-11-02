@@ -11,9 +11,10 @@ internal fun SkipInterval.internalSkipAction(
     intervals: List<SkipInterval>,
     durationMs: Long = 0L,
 ): InternalSkipAction? {
-    if (isShortPlaceholderDuration(durationMs)) return null
     val normalizedType = type.trim().lowercase()
     if (normalizedType == "post-credits") return null
+    val isIntroLike = normalizedType in listOf("intro", "op", "mixed-op", "recap", "opening")
+    if (!isIntroLike && isShortPlaceholderDuration(durationMs)) return null
     val isMovieCredits = normalizedType == "movie-credits"
     // Episode providers may use Double.MAX_VALUE as an open-ended segment sentinel.
     if (isMovieCredits && !hasValidSeekTimes()) return null

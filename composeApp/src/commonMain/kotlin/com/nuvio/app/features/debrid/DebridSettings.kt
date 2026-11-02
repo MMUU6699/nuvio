@@ -9,7 +9,7 @@ data class DebridSettings(
     val preferredResolverProviderId: String = "",
     val instantPlaybackPreparationLimit: Int = 0,
     val streamMaxResults: Int = 0,
-    val streamSortMode: DebridStreamSortMode = DebridStreamSortMode.DEFAULT,
+    val streamSortMode: DebridStreamSortMode = DebridStreamSortMode.QUALITY_DESC,
     val streamMinimumQuality: DebridStreamMinimumQuality = DebridStreamMinimumQuality.ANY,
     val streamDolbyVisionFilter: DebridStreamFeatureFilter = DebridStreamFeatureFilter.ANY,
     val streamHdrFilter: DebridStreamFeatureFilter = DebridStreamFeatureFilter.ANY,

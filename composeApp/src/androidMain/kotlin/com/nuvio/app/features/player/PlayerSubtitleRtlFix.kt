@@ -79,7 +79,7 @@ internal object PlayerSubtitleRtlFix {
 
     private fun wrapArabicLines(text: CharSequence): CharSequence {
         val preserveSpans = text is Spanned
-        val builder: Appendable = if (preserveSpans) SpannableStringBuilder() else StringBuilder(text.length + 8)
+        val builder: Appendable = if (preserveSpans) SpannableStringBuilder() else StringBuilder(text.length + 16)
         val lines = text.splitByNewlines()
         for (i in lines.indices) {
             if (i > 0) builder.append('\n')
@@ -94,7 +94,7 @@ internal object PlayerSubtitleRtlFix {
                 builder.append(line)
                 continue
             }
-            builder.append('\u202B').append(core).append('\u202C')
+            builder.append('\u200F').append('\u2067').append(core).append('\u2069').append('\u200F')
             if (hasCr) builder.append('\r')
         }
         return finishBuilder(builder)
@@ -262,7 +262,8 @@ internal object PlayerSubtitleRtlFix {
 
     private fun isDirectionalMark(c: Char): Boolean =
         c == '\u202A' || c == '\u202B' || c == '\u202C' ||
-            c == '\u200E' || c == '\u200F'
+            c == '\u200E' || c == '\u200F' ||
+            c == '\u2066' || c == '\u2067' || c == '\u2068' || c == '\u2069'
 
     private fun CharSequence.splitByNewlines(): List<CharSequence> {
         val result = mutableListOf<CharSequence>()

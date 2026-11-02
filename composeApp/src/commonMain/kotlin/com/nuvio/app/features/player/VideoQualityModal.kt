@@ -108,6 +108,14 @@ internal fun defaultVideoQualityOptions(selectedHeight: Int): List<VideoQualityT
     ),
     VideoQualityTrack(
         index = 1,
+        id = "2160p",
+        label = "4K Ultra HD (2160p) • دقة فائقة الجودة",
+        height = 2160,
+        width = 3840,
+        isSelected = selectedHeight == 2160,
+    ),
+    VideoQualityTrack(
+        index = 2,
         id = "1080p",
         label = "1080p Full HD • دقة فائقة الوضوح",
         height = 1080,
@@ -115,7 +123,7 @@ internal fun defaultVideoQualityOptions(selectedHeight: Int): List<VideoQualityT
         isSelected = selectedHeight == 1080,
     ),
     VideoQualityTrack(
-        index = 2,
+        index = 3,
         id = "720p",
         label = "720p HD • دقة عالية",
         height = 720,
@@ -123,7 +131,7 @@ internal fun defaultVideoQualityOptions(selectedHeight: Int): List<VideoQualityT
         isSelected = selectedHeight == 720,
     ),
     VideoQualityTrack(
-        index = 3,
+        index = 4,
         id = "480p",
         label = "480p SD • متوسطة (توفير البيانات)",
         height = 480,
@@ -131,7 +139,7 @@ internal fun defaultVideoQualityOptions(selectedHeight: Int): List<VideoQualityT
         isSelected = selectedHeight == 480,
     ),
     VideoQualityTrack(
-        index = 4,
+        index = 5,
         id = "360p",
         label = "360p • منخفضة (للإنترنت الضعيف)",
         height = 360,

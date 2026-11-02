@@ -321,6 +321,7 @@ internal object SubtitleCharsetDetector {
         // Statistical evaluation for non-Latin single-byte alphabets (Hebrew, Arabic, Thai, Cyrillic, Greek)
         var thaiConsonants = 0
         var hebrewLetters = 0
+        var arabicLetters = 0
         var arabicAlCount = 0
         var russianVowels = 0
         var koi8Vowels = 0
@@ -331,11 +332,12 @@ internal object SubtitleCharsetDetector {
             val b = bytes[i].toInt() and 0xFF
             if (b in 0xA1..0xBF) thaiConsonants++
             if (b in 0xE0..0xFA) hebrewLetters++
+            if ((b in 0xC1..0xDA) || (b in 0xE0..0xF8)) arabicLetters++
             if (b in 0xC0..0xDF) bytes0xC0to0xDF++
             if (b == 0xEE || b == 0xE0 || b == 0xE5 || b == 0xE8 || b == 0xFF || b == 0xFB || b == 0xF3 || b == 0xFD || b == 0xFE) russianVowels++
             if (b == 0xCF || b == 0xC1 || b == 0xC5 || b == 0xC9 || b == 0xD5 || b == 0xDF) koi8Vowels++
             if (b == 0xE1 || b == 0xEF || b == 0xE5 || b == 0xE7 || b == 0xFD || b == 0xFE || b == 0xE9 || b == 0xF5 || b == 0xF9 || b == 0xDC || b == 0xDD || b == 0xDE || b == 0xDF || b == 0xFA || b == 0xFB || b == 0xFC) greekVowels++
-            if (i < end - 1 && b == 0xC7 && (bytes[i + 1].toInt() and 0xFF) == 0xE1) arabicAlCount++
+            if (i < end - 1 && b == 0xC7 && (bytes[i + 1].toInt() and 0xFF) == 0xE5) arabicAlCount++
         }
 
         // Hebrew check: consonants (0xE0..0xFA) make up all non-ASCII bytes in non-Latin script
@@ -348,8 +350,8 @@ internal object SubtitleCharsetDetector {
             return CHARSET_WIN874
         }
 
-        // Arabic check
-        if (arabicAlCount > 0) {
+        // Arabic check (0xC7 0xE5 = "ال" or dominant Windows-1256 Arabic letter range)
+        if (arabicAlCount > 0 || (arabicLetters >= 6 && arabicLetters * 2 >= nonAscii)) {
             return CHARSET_WIN1256
         }
 

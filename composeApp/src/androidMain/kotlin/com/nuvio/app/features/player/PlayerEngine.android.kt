@@ -347,7 +347,7 @@ private fun ExoPlayerSurface(
     val subtitleStyleGuard = remember { SubtitleStyleGuard() }
     var decoderPriorityOverride by remember(playerSourceKey) { mutableStateOf<Int?>(null) }
     var fallbackStartPositionMs by remember(playerSourceKey) { mutableStateOf<Long?>(null) }
-    var selectedMaxVideoHeight by remember(playerSourceKey) { mutableStateOf(1080) }
+    var selectedMaxVideoHeight by remember(playerSourceKey) { mutableStateOf(Int.MAX_VALUE) }
     val effectiveDecoderPriority = decoderPriorityOverride ?: playerSettings.decoderPriority
 
     var resolvedMediaItem by remember(playerSourceKey, externalSubtitles) {
@@ -829,8 +829,13 @@ private fun ExoPlayerSurface(
                     exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
                         .buildUpon()
                         .setMaxVideoSize(Int.MAX_VALUE, selectedMaxVideoHeight)
-                        .setMinVideoSize(0, (selectedMaxVideoHeight * 0.75).toInt())
                         .setForceHighestSupportedBitrate(true)
+                        .build()
+                } else if (selectedMaxVideoHeight >= Int.MAX_VALUE) {
+                    exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                        .buildUpon()
+                        .clearVideoSizeConstraints()
+                        .setForceHighestSupportedBitrate(false)
                         .build()
                 }
                 // Guarantee audio track is enabled and selected if the stream has audio groups
@@ -1095,13 +1100,13 @@ private fun ExoPlayerSurface(
                     val builder = exoPlayer.trackSelectionParameters
                         .buildUpon()
                         .clearOverridesOfType(C.TRACK_TYPE_VIDEO)
-                    if (maxHeight <= 0) {
+                    if (maxHeight <= 0 || maxHeight >= Int.MAX_VALUE) {
                         builder
                             .clearVideoSizeConstraints()
                             .setForceHighestSupportedBitrate(false)
                     } else {
                         val maxWidth = when {
-                            maxHeight >= 2160 -> 3840
+                            maxHeight >= 2160 -> 4096
                             maxHeight >= 1440 -> 2560
                             maxHeight >= 1080 -> 1920
                             maxHeight >= 720 -> 1280
@@ -1765,7 +1770,13 @@ private class NuvioLibmpvView(
 
     override fun initOptions() {
         setVo(videoOutput.mpvValue)
-        mpv.setOptionString("profile", "fast")
+        mpv.setOptionString("profile", "gpu-hq")
+        mpv.setOptionString("scale", "spline36")
+        mpv.setOptionString("cscale", "spline36")
+        mpv.setOptionString("dscale", "mitchell")
+        mpv.setOptionString("deband", "yes")
+        mpv.setOptionString("dither-depth", "auto")
+        mpv.setOptionString("sub-codepage", "auto:cp1256:utf-8")
         mpv.setOptionString("hwdec", if (hardwareDecodingEnabled) "auto" else "no")
         if (yuv420pEnabled) {
             mpv.setOptionString("vf", "format=yuv420p")
@@ -2967,7 +2978,7 @@ private class CueNormalizingTextOutput(
     }
 
     private fun processCue(cue: Cue): Cue? {
-        var processed = fixRtlCueText(cue)
+        var processed = cue
         if (shouldStripSdhProvider()) {
             val text = processed.text?.toString() ?: return processed
             val filtered = SubtitleSdhFilter.filter(text) ?: return null
@@ -2975,6 +2986,7 @@ private class CueNormalizingTextOutput(
                 processed = processed.buildUpon().setText(filtered).build()
             }
         }
+        processed = fixRtlCueText(processed)
         if (shouldNormalizeCuePositionProvider()) {
             processed = normalizeCuePosition(processed)
         }
