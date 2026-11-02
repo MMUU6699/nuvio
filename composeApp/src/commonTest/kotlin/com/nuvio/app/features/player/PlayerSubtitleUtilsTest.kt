@@ -122,5 +122,13 @@ class PlayerSubtitleUtilsTest {
         // Subtitle only containing noise should return null
         val noiseOnly = "[صوت رعد]\n(نباح الكلاب)\n♪♪♪"
         assertEquals(null, SubtitleSdhFilter.filter(noiseOnly))
+
+        // Dialogue dash with SDH noise and mixed script
+        val userReportedSDH = "-(شخير) Sheathe أن الصلب ، كنت twats!"
+        assertEquals("- Sheathe أن الصلب ، كنت twats!", SubtitleSdhFilter.filter(userReportedSDH))
+
+        // English location card in Arabic subtitle track
+        assertEquals(null, SubtitleSdhFilter.filter("KING'S LANDING", isArabicTrack = true))
+        assertEquals(null, SubtitleSdhFilter.filter("NEW YORK, 1985", isArabicTrack = true))
     }
 }

@@ -77,9 +77,25 @@ internal object PlayerSubtitleRtlFix {
         return CuesWithTiming(cues, entry.startTimeUs, durationUs)
     }
 
-    private fun wrapArabicLines(text: CharSequence): CharSequence {
+    private val mixedScriptTrailingPunctuationRegex = Regex("""([a-zA-Z0-9]+[!?,.:;]+)""")
+
+    private fun sanitizeMixedScriptPunctuation(line: CharSequence): CharSequence {
+        val str = line.toString()
+        var modified = str
+        if (containsArabic(str) && str.any { it in 'a'..'z' || it in 'A'..'Z' }) {
+            modified = mixedScriptTrailingPunctuationRegex.replace(modified) { match ->
+                match.value + "\u200E"
+            }
+        }
+        if (modified.startsWith("- ") || modified.startsWith("– ") || modified.startsWith("— ")) {
+            modified = "\u200F" + modified
+        }
+        return modified
+    }
+
+    internal fun wrapArabicLines(text: CharSequence): CharSequence {
         val preserveSpans = text is Spanned
-        val builder: Appendable = if (preserveSpans) SpannableStringBuilder() else StringBuilder(text.length + 16)
+        val builder: Appendable = if (preserveSpans) SpannableStringBuilder() else StringBuilder(text.length + 32)
         val lines = text.splitByNewlines()
         for (i in lines.indices) {
             if (i > 0) builder.append('\n')
@@ -89,11 +105,12 @@ internal object PlayerSubtitleRtlFix {
                 continue
             }
             val hasCr = line[line.length - 1] == '\r'
-            val core = if (hasCr) line.subSequence(0, line.length - 1) else line
-            if (core.isEmpty()) {
+            val rawCore = if (hasCr) line.subSequence(0, line.length - 1) else line
+            if (rawCore.isEmpty()) {
                 builder.append(line)
                 continue
             }
+            val core = sanitizeMixedScriptPunctuation(rawCore)
             builder.append('\u200F').append('\u2067').append(core).append('\u2069').append('\u200F')
             if (hasCr) builder.append('\r')
         }

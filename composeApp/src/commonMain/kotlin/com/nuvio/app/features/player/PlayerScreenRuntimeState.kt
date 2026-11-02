@@ -16,6 +16,7 @@ import com.nuvio.app.features.p2p.P2pSettingsUiState
 import com.nuvio.app.features.p2p.P2pStreamingState
 import com.nuvio.app.features.player.skip.NextEpisodeInfo
 import com.nuvio.app.features.player.skip.SkipInterval
+import com.nuvio.app.features.streams.StreamItem
 import com.nuvio.app.features.streams.StreamsUiState
 import com.nuvio.app.features.tracking.TrackingMediaReference
 import com.nuvio.app.features.watched.WatchedUiState
@@ -246,6 +247,7 @@ internal class PlayerScreenRuntime(
     var serverTrackSwitchJob by mutableStateOf<Job?>(null)
     var serverAudioPreferenceKey: String? = null
     var subtitleTracks by mutableStateOf<List<SubtitleTrack>>(emptyList())
+    var availableStreams by mutableStateOf<List<StreamItem>>(args.availableStreams)
     var videoQualityTracks by mutableStateOf<List<VideoQualityTrack>>(emptyList())
     var selectedVideoQualityHeight by mutableStateOf(Int.MAX_VALUE)
     var selectedAudioIndex by mutableStateOf(-1)

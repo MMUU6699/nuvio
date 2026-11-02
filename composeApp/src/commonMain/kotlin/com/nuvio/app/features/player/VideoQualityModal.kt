@@ -43,7 +43,25 @@ fun VideoQualityModal(
     val effectiveTracks = if (qualityTracks.isNotEmpty()) {
         qualityTracks
     } else {
-        defaultVideoQualityOptions(selectedHeight)
+        val h = if (selectedHeight > 0 && selectedHeight < Int.MAX_VALUE) selectedHeight else 1080
+        val label = when {
+            h >= 2160 -> "4K Ultra HD (${h}p)"
+            h >= 1080 -> "1080p Full HD"
+            h >= 720 -> "720p HD"
+            h >= 480 -> "480p SD"
+            else -> "${h}p"
+        }
+        listOf(
+            VideoQualityTrack(
+                index = 1,
+                id = "current_stream_q",
+                label = "$label • الجودة المتوفرة",
+                height = h,
+                width = h * 16 / 9,
+                isSelected = true,
+                isAuto = false,
+            )
+        )
     }
 
     PlayerOverlayScaffold(

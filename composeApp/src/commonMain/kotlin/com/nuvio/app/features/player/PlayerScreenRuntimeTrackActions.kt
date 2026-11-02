@@ -1,5 +1,38 @@
 package com.nuvio.app.features.player
 
+import com.nuvio.app.features.streams.StreamItem
+
+internal fun StreamItem.detectResolutionHeight(): Int {
+    for (badge in badges) {
+        val b = badge.name.trim().lowercase()
+        when {
+            b == "4k" || b == "2160p" || b == "uhd" -> return 2160
+            b == "1440p" || b == "2k" || b == "qhd" -> return 1440
+            b == "1080p" || b == "fhd" -> return 1080
+            b == "720p" || b == "hd" -> return 720
+            b == "480p" || b == "sd" -> return 480
+            b == "360p" -> return 360
+        }
+    }
+    val combinedText = buildString {
+        name?.let { append(it).append(' ') }
+        title?.let { append(it).append(' ') }
+        description?.let { append(it).append(' ') }
+        behaviorHints.filename?.let { append(it).append(' ') }
+        url?.let { append(it) }
+    }.lowercase()
+
+    return when {
+        Regex("""\b(?:2160p|4k|uhd)\b""").containsMatchIn(combinedText) -> 2160
+        Regex("""\b(?:1440p|2k|qhd)\b""").containsMatchIn(combinedText) -> 1440
+        Regex("""\b(?:1080p|fhd|1920x1080)\b""").containsMatchIn(combinedText) -> 1080
+        Regex("""\b(?:720p|hd|1280x720)\b""").containsMatchIn(combinedText) -> 720
+        Regex("""\b(?:480p|sd|854x480|640x480)\b""").containsMatchIn(combinedText) -> 480
+        Regex("""\b(?:360p|640x360)\b""").containsMatchIn(combinedText) -> 360
+        else -> 0
+    }
+}
+
 internal val PlayerScreenRuntime.subtitleStyle: SubtitleStyleState
     get() = playerSettingsUiState.subtitleStyle
 
@@ -182,7 +215,8 @@ internal fun PlayerScreenRuntime.refreshTracks() {
     val previousAudioIndex = selectedAudioIndex
     audioTracks = ctrl.getAudioTracks()
     subtitleTracks = ctrl.getSubtitleTracks()
-    videoQualityTracks = ctrl.getVideoQualityTracks()
+    val controllerQualityTracks = ctrl.getVideoQualityTracks()
+    videoQualityTracks = resolveEffectiveQualityTracks(controllerQualityTracks)
     val selectedAudio = audioTracks.firstOrNull { it.isSelected }
     if (selectedAudio != null) selectedAudioIndex = selectedAudio.index
     val selectedSub = subtitleTracks.firstOrNull { it.isSelected }
@@ -209,21 +243,136 @@ internal fun PlayerScreenRuntime.refreshTracks() {
     applyPendingEngineSwitchTrackPreference()
 }
 
+internal fun PlayerScreenRuntime.resolveEffectiveQualityTracks(
+    controllerTracks: List<VideoQualityTrack>
+): List<VideoQualityTrack> {
+    if (controllerTracks.size > 1) {
+        // Multi-track adaptive stream: use real tracks reported by player engine
+        return controllerTracks
+    }
+
+    val candidateStreams = availableStreams.ifEmpty {
+        PlayerStreamsRepository.sourceState.value.groups.flatMap { it.streams }
+    }
+    if (candidateStreams.isEmpty()) {
+        return controllerTracks
+    }
+
+    val activeHeight = controllerTracks.firstOrNull()?.height
+        ?: activeStream?.detectResolutionHeight()
+        ?: playbackSnapshot.videoHeight.takeIf { it > 0 }
+        ?: 1080
+
+    val streamsByHeight: Map<Int, List<StreamItem>> = candidateStreams
+        .mapNotNull { s: StreamItem ->
+            val h = s.detectResolutionHeight().takeIf { it > 0 }
+            if (h != null) Pair(h, s) else null
+        }
+        .groupBy({ pair -> pair.first }, { pair -> pair.second })
+
+    if (streamsByHeight.isEmpty() || streamsByHeight.keys.size <= 1) {
+        // Only 1 real resolution available across all streams
+        val singleHeight = streamsByHeight.keys.firstOrNull() ?: activeHeight
+        val label = when {
+            singleHeight >= 2160 -> "4K Ultra HD (${singleHeight}p)"
+            singleHeight >= 1080 -> "1080p Full HD"
+            singleHeight >= 720 -> "720p HD"
+            singleHeight >= 480 -> "480p SD"
+            else -> "${singleHeight}p"
+        }
+        return listOf(
+            VideoQualityTrack(
+                index = 1,
+                id = "single_q_${singleHeight}p",
+                label = "$label • الجودة الوحيدة المتوفرة",
+                width = singleHeight * 16 / 9,
+                height = singleHeight,
+                isSelected = true,
+                isAuto = false,
+            )
+        )
+    }
+
+    var idx = 1
+    val tracks = mutableListOf<VideoQualityTrack>()
+    val sortedHeights: List<Int> = streamsByHeight.keys.sortedDescending()
+    for (h in sortedHeights) {
+        val siblings: List<StreamItem> = streamsByHeight[h].orEmpty()
+        val preferred: StreamItem = siblings.firstOrNull { it.addonId == activeProviderAddonId }
+            ?: siblings.first()
+        val label = when {
+            h >= 2160 -> "4K Ultra HD (2160p)"
+            h >= 1440 -> "2K Quad HD (1440p)"
+            h >= 1080 -> "1080p Full HD"
+            h >= 720 -> "720p HD"
+            h >= 480 -> "480p SD"
+            else -> "${h}p"
+        }
+        val detail = preferred.streamLabel.takeIf { it.isNotBlank() && it != "Stream" }
+        tracks += VideoQualityTrack(
+            index = idx++,
+            id = "stream_q_${h}p",
+            label = if (detail != null) "$label • $detail" else label,
+            width = h * 16 / 9,
+            height = h,
+            isSelected = if (selectedVideoQualityHeight <= 0 || selectedVideoQualityHeight == Int.MAX_VALUE) {
+                h == activeHeight
+            } else {
+                h == selectedVideoQualityHeight
+            },
+            isAuto = false,
+        )
+    }
+    return tracks
+}
+
 internal fun PlayerScreenRuntime.selectVideoQualityOption(maxHeight: Int) {
     selectedVideoQualityHeight = maxHeight
-    playerController?.selectVideoQuality(maxHeight)
-    videoQualityTracks = playerController?.getVideoQualityTracks().orEmpty()
+    val ctrl = playerController
+    val ctrlTracks = ctrl?.getVideoQualityTracks().orEmpty()
+    if (ctrlTracks.size > 1) {
+        // Multi-track adaptive stream: use ExoPlayer/MPV track selector
+        ctrl?.selectVideoQuality(maxHeight)
+    } else {
+        // Single-stream progressive file: switch to matching stream from provider at current position!
+        val candidateStreams: List<StreamItem> = availableStreams.ifEmpty {
+            PlayerStreamsRepository.sourceState.value.groups.flatMap { it.streams }
+        }
+        val matchingStreams: List<StreamItem> = candidateStreams.filter { it.detectResolutionHeight() == maxHeight }
+        if (matchingStreams.isNotEmpty()) {
+            val targetStream: StreamItem = matchingStreams.firstOrNull { it.addonId == activeProviderAddonId }
+                ?: matchingStreams.first()
+            if (targetStream.playerSourceIdentityKey() != activeSourceIdentityKey) {
+                switchToSource(targetStream)
+            }
+        } else {
+            ctrl?.selectVideoQuality(maxHeight)
+        }
+    }
+    refreshTracks()
     showQualityModal = false
 }
 
 internal val PlayerScreenRuntime.activeVideoQualityLabel: String
-    get() = when {
-        selectedVideoQualityHeight == Int.MAX_VALUE || selectedVideoQualityHeight <= 0 -> "تلقائي"
-        selectedVideoQualityHeight >= 2160 -> "4K"
-        selectedVideoQualityHeight >= 1080 -> "1080p FHD"
-        selectedVideoQualityHeight >= 720 -> "720p HD"
-        selectedVideoQualityHeight >= 480 -> "480p"
-        else -> "${selectedVideoQualityHeight}p"
+    get() {
+        val selected = videoQualityTracks.firstOrNull { it.isSelected }
+        if (selected != null && selected.height > 0) {
+            return when {
+                selected.height >= 2160 -> "4K"
+                selected.height >= 1080 -> "1080p"
+                selected.height >= 720 -> "720p"
+                selected.height >= 480 -> "480p"
+                else -> "${selected.height}p"
+            }
+        }
+        return when {
+            selectedVideoQualityHeight == Int.MAX_VALUE || selectedVideoQualityHeight <= 0 -> "تلقائي"
+            selectedVideoQualityHeight >= 2160 -> "4K"
+            selectedVideoQualityHeight >= 1080 -> "1080p FHD"
+            selectedVideoQualityHeight >= 720 -> "720p HD"
+            selectedVideoQualityHeight >= 480 -> "480p"
+            else -> "${selectedVideoQualityHeight}p"
+        }
     }
 
 private fun PlayerScreenRuntime.tryAutoSelectPreferredSubtitleFromAvailableTracks(

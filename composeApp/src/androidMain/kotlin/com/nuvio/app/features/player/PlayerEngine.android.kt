@@ -1061,8 +1061,15 @@ private fun ExoPlayerSurface(
                             }
                         }
                     }
-                    val defaults = defaultVideoQualityOptions(selectedMaxVideoHeight)
-                    if (discoveredByHeight.isEmpty()) return defaults
+                    if (discoveredByHeight.isEmpty()) return emptyList()
+                    if (discoveredByHeight.size == 1) {
+                        return discoveredByHeight.values.mapIndexed { index, track ->
+                            track.copy(
+                                index = index + 1,
+                                isSelected = true,
+                            )
+                        }
+                    }
                     val merged = mutableListOf<VideoQualityTrack>()
                     merged += VideoQualityTrack(
                         index = 0,
@@ -1070,27 +1077,14 @@ private fun ExoPlayerSurface(
                         label = "تلقائي (حسب سرعة الإنترنت)",
                         width = 0,
                         height = 0,
-                        isSelected = selectedMaxVideoHeight == 0,
+                        isSelected = selectedMaxVideoHeight == 0 || selectedMaxVideoHeight == Int.MAX_VALUE,
                         isAuto = true,
                     )
-                    val allHeights = (discoveredByHeight.keys + listOf(1080, 720, 480, 360))
-                        .distinct()
-                        .sortedDescending()
-                    allHeights.forEachIndexed { orderIdx, h ->
-                        val discovered = discoveredByHeight[h]
-                        if (discovered != null) {
-                            merged += discovered.copy(
-                                index = orderIdx + 1,
-                                isSelected = selectedMaxVideoHeight == h,
-                            )
-                        } else {
-                            defaults.firstOrNull { it.height == h }?.let { fallback ->
-                                merged += fallback.copy(
-                                    index = orderIdx + 1,
-                                    isSelected = selectedMaxVideoHeight == h,
-                                )
-                            }
-                        }
+                    discoveredByHeight.values.sortedByDescending { it.height }.forEachIndexed { orderIdx, discovered ->
+                        merged += discovered.copy(
+                            index = orderIdx + 1,
+                            isSelected = selectedMaxVideoHeight == discovered.height,
+                        )
                     }
                     return merged
                 }
@@ -2986,7 +2980,7 @@ private class CueNormalizingTextOutput(
                 processed = processed.buildUpon().setText(filtered).build()
             }
         }
-        processed = fixRtlCueText(processed)
+        processed = PlayerSubtitleRtlFix.fixCueText(processed, isBuiltInSubtitle = true)
         if (shouldNormalizeCuePositionProvider()) {
             processed = normalizeCuePosition(processed)
         }
@@ -3028,42 +3022,6 @@ private class CueNormalizingTextOutput(
             .setLine(Cue.DIMEN_UNSET, Cue.TYPE_UNSET)
             .setLineAnchor(Cue.TYPE_UNSET)
             .build()
-    }
-
-    private fun fixRtlCueText(cue: Cue): Cue {
-        val text = cue.text ?: return cue
-        if (!containsRtlChars(text)) return cue
-        val original = text.toString()
-        val fixed = original.split('\n').joinToString("\n") { line ->
-            moveLeadingRtlPunctuationToEnd(line)
-        }
-        if (fixed == original) return cue
-        return cue.buildUpon().setText(SpannableString(fixed)).build()
-    }
-
-    private fun moveLeadingRtlPunctuationToEnd(line: String): String {
-        if (line.isEmpty()) return line
-        var end = 0
-        while (end < line.length && line[end] in RTL_PUNCTUATION) end++
-        if (end == 0) return line
-        return line.substring(end) + line.substring(0, end)
-    }
-
-    private fun containsRtlChars(text: CharSequence): Boolean {
-        for (char in text) {
-            val directionality = Character.getDirectionality(char)
-            if (
-                directionality == Character.DIRECTIONALITY_RIGHT_TO_LEFT ||
-                directionality == Character.DIRECTIONALITY_RIGHT_TO_LEFT_ARABIC
-            ) {
-                return true
-            }
-        }
-        return false
-    }
-
-    companion object {
-        private val RTL_PUNCTUATION = setOf('.', ',', '?', '!', '-', ':', ';', '…', ')', '(')
     }
 }
 

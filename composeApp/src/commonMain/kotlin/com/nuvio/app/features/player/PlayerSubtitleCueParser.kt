@@ -7,19 +7,21 @@ object PlayerSubtitleCueParser {
 
     fun parse(text: String, sourceUrl: String? = null): List<SubtitleSyncCue> {
         val cleanedText = cleanText(text)
+        val isArabic = cleanedText.any { it in '\u0600'..'\u06FF' || it in '\uFB50'..'\uFEFF' }
         return when (detectSubtitleFormat(sourceUrl, cleanedText)) {
-            SubtitleFormatHint.WebVtt -> parseVtt(cleanedText)
-            SubtitleFormatHint.Ass -> parseAss(cleanedText)
-            SubtitleFormatHint.Ttml -> parseTtml(cleanedText)
-            SubtitleFormatHint.Srt -> parseSrt(cleanedText)
+            SubtitleFormatHint.WebVtt -> parseVtt(cleanedText, isArabic)
+            SubtitleFormatHint.Ass -> parseAss(cleanedText, isArabic)
+            SubtitleFormatHint.Ttml -> parseTtml(cleanedText, isArabic)
+            SubtitleFormatHint.Srt -> parseSrt(cleanedText, isArabic)
         }
     }
 
     fun parseFromText(rawText: String, sourceUrl: String): List<SubtitleSyncCue> {
         val cleanedText = cleanText(rawText)
+        val isArabic = cleanedText.any { it in '\u0600'..'\u06FF' || it in '\uFB50'..'\uFEFF' }
         return when (detectSubtitleFormat(sourceUrl, cleanedText)) {
-            SubtitleFormatHint.WebVtt -> parseVtt(cleanedText)
-            SubtitleFormatHint.Srt -> parseSrt(cleanedText)
+            SubtitleFormatHint.WebVtt -> parseVtt(cleanedText, isArabic)
+            SubtitleFormatHint.Srt -> parseSrt(cleanedText, isArabic)
             SubtitleFormatHint.Ass, SubtitleFormatHint.Ttml -> emptyList()
         }
     }
@@ -66,7 +68,7 @@ object PlayerSubtitleCueParser {
         }
     }
 
-    private fun parseSrt(text: String): List<SubtitleSyncCue> {
+    private fun parseSrt(text: String, isArabic: Boolean = false): List<SubtitleSyncCue> {
         val blocks = text.split(Regex("""\n\s*\n"""))
         val cues = mutableListOf<SubtitleSyncCue>()
         for (block in blocks) {
@@ -85,14 +87,14 @@ object PlayerSubtitleCueParser {
             val (startTimeMs, endTimeMs) = parseStartEndTimeMs(timing) ?: continue
             if (endTimeMs - startTimeMs <= 0) continue
             val textLines = lines.drop(index + 1)
-            val cueText = normalizeCueText(textLines.joinToString("\n"))
+            val cueText = normalizeCueText(textLines.joinToString("\n"), isArabic)
             if (cueText.isBlank()) continue
             cues += SubtitleSyncCue(startTimeMs = startTimeMs, endTimeMs = endTimeMs, text = cueText)
         }
         return cues
     }
 
-    private fun parseVtt(text: String): List<SubtitleSyncCue> {
+    private fun parseVtt(text: String, isArabic: Boolean = false): List<SubtitleSyncCue> {
         val lines = text
             .lines()
             .map { it.trimEnd() }
@@ -144,7 +146,7 @@ object PlayerSubtitleCueParser {
                 textParts += lines[i].trim()
                 i++
             }
-            val cueText = normalizeCueText(textParts.joinToString("\n"))
+            val cueText = normalizeCueText(textParts.joinToString("\n"), isArabic)
             if (cueText.isNotBlank()) {
                 cues += SubtitleSyncCue(startTimeMs = startTimeMs, endTimeMs = endTimeMs, text = cueText)
             }
@@ -167,7 +169,7 @@ object PlayerSubtitleCueParser {
         "Text",
     )
 
-    private fun parseAss(text: String): List<SubtitleSyncCue> {
+    private fun parseAss(text: String, isArabic: Boolean = false): List<SubtitleSyncCue> {
         var inEventsSection = false
         var formatFields: List<String>? = null
 
@@ -190,14 +192,14 @@ object PlayerSubtitleCueParser {
                         null
                     }
                     inEventsSection && line.startsWith("Dialogue:", ignoreCase = true) ->
-                        parseAssDialogue(line.substringAfter(':'), formatFields)
+                        parseAssDialogue(line.substringAfter(':'), formatFields, isArabic)
                     else -> null
                 }
             }
             .sortedBy { it.startTimeMs }
     }
 
-    private fun parseAssDialogue(payload: String, formatFields: List<String>?): SubtitleSyncCue? {
+    private fun parseAssDialogue(payload: String, formatFields: List<String>?, isArabic: Boolean = false): SubtitleSyncCue? {
         val fields = formatFields.orEmpty()
         val parts = payload
             .split(',', limit = fields.ifEmpty { defaultAssFormatFields }.size)
@@ -215,12 +217,13 @@ object PlayerSubtitleCueParser {
                 .replace(Regex("""\{[^}]*}"""), "")
                 .replace("\\N", "\n")
                 .replace("\\n", "\n")
-                .replace("\\h", " ")
+                .replace("\\h", " "),
+            isArabic
         )
         return if (body.isBlank()) null else SubtitleSyncCue(startTimeMs = start, endTimeMs = end, text = body)
     }
 
-    private fun parseTtml(text: String): List<SubtitleSyncCue> =
+    private fun parseTtml(text: String, isArabic: Boolean = false): List<SubtitleSyncCue> =
         Regex("""(?is)<p\b([^>]*)>(.*?)</p>""")
             .findAll(text)
             .mapNotNull { match ->
@@ -234,7 +237,8 @@ object PlayerSubtitleCueParser {
                 if (end - start <= 0) return@mapNotNull null
                 val body = normalizeCueText(
                     match.groupValues[2]
-                        .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n")
+                        .replace(Regex("""<br\s*/?>""", RegexOption.IGNORE_CASE), "\n"),
+                    isArabic
                 )
                 if (body.isBlank()) null else SubtitleSyncCue(startTimeMs = start, endTimeMs = end, text = body)
             }
@@ -322,8 +326,8 @@ object PlayerSubtitleCueParser {
             ?.getOrNull(1)
             ?.takeIf { it.isNotBlank() }
 
-    private fun normalizeCueText(text: String): String {
-        return text
+    private fun normalizeCueText(text: String, isArabicTrack: Boolean = false): String {
+        val basic = text
             .replace(Regex("""<(?:\d+:)?\d{1,2}:\d{2}(?:[.,]\d+)?>"""), "")
             .replace(Regex("""\{[^}]*\}"""), "")
             .replace(Regex("""</?[a-zA-Z0-9._-]+(?: [^>]*)?>"""), "")
@@ -339,5 +343,7 @@ object PlayerSubtitleCueParser {
             .map { it.replace(Regex("""[ \t]+"""), " ").trim() }
             .filter { it.isNotBlank() }
             .joinToString("\n")
+
+        return SubtitleSdhFilter.filter(basic, isArabicTrack = isArabicTrack).orEmpty()
     }
 }

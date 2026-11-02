@@ -242,6 +242,7 @@ internal fun StreamDestination(
             contentLanguage = resolveLaunchContentLanguage(),
             sourceFilename = stream.behaviorHints.filename,
             stream = stream,
+            availableStreams = StreamsRepository.uiState.value.groups.flatMap { it.streams },
         )
 
         autoPlayNavigationStarted = replaceStreamRoute
@@ -375,6 +376,7 @@ internal fun StreamDestination(
                         bingeGroup = cached.bingeGroup,
                     ),
                 ),
+                availableStreams = StreamsRepository.uiState.value.groups.flatMap { it.streams },
             )
             if (playerSettings.externalPlayerEnabled) {
                 openExternalPlayback(playerLaunch)
@@ -540,6 +542,7 @@ internal fun StreamDestination(
             contentLanguage = resolveLaunchContentLanguage(),
             sourceFilename = stream.behaviorHints.filename,
             stream = stream,
+            availableStreams = StreamsRepository.uiState.value.groups.flatMap { it.streams },
         )
         if (playerSettings.externalPlayerEnabled && stream.serverTarget == null) {
             openExternalPlayback(playerLaunch)
@@ -736,6 +739,7 @@ internal fun StreamDestination(
             contentLanguage = resolveLaunchContentLanguage(),
             sourceFilename = stream.behaviorHints.filename,
             stream = stream,
+            availableStreams = StreamsRepository.uiState.value.groups.flatMap { it.streams },
         )
 
         if (!forceInternal && (forceExternal || playerSettings.externalPlayerEnabled)) {

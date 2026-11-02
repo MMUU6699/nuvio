@@ -15,6 +15,12 @@ internal object SubtitleSdhFilter {
     // Matches musical notes and sung lyrics: ♪, ♫, ♬, ♩, #
     private val musicSymbols = Regex("""(?:[♪♫♬♩#]+[^♪♫♬♩#\r\n]*[♪♫♬♩#]+|[♪♫♬♩]+)[ \t]*""")
 
+    // Matches narrative speaker prefixes like "الشخص يقول :" or "الراوي يقول:"
+    private val arabicNarrativeSpeakerPrefix = Regex(
+        """(?m)^([ \t]*-[ \t]*)?(?:الشخص|المتحدث|الراوي|صوت|رجل|امرأة)\s+يقول\s*[:：]?[ \t]*""",
+        RegexOption.IGNORE_CASE
+    )
+
     // Matches speaker names followed by a colon (e.g. "أحمد:", "الضابط:", "JOHN:", "- MARY:", "[MAN]:")
     // Preserves the leading dialogue dash "-" if present.
     private val speakerLabel = Regex(
@@ -36,13 +42,16 @@ internal object SubtitleSdhFilter {
     // Matches uppercase Latin location / time / scene title cards like "PARIS, FRANCE", "LOS ANGELES - 1984"
     private val latinLocationCard = Regex("""^[A-Z0-9\s,.'’\-–—/:;]{3,60}$""")
 
+    // Dialogue dash cleanup: matches dash followed by stray punctuation left behind after SDH removal, e.g. "-:", "-,", "-!"
+    private val strayDashPunctuation = Regex("""^([ \t]*[-—–])[ \t]*[:：,!?.،؛]+[ \t]*""")
+
     // Subtitle site advertisements / watermarks
     private val subtitleWatermarks = listOf(
         "subtitles by", "opensubtitles", "downloaded from", "yify", "yts.mx",
         "podnapisi", "addic7ed", "subscene", "ترجمة وتعديل", "قام بالترجمة"
     )
 
-    fun filter(text: String): String? {
+    fun filter(text: String, isArabicTrack: Boolean = false): String? {
         // Strip ASS and HTML tags first
         var filtered = text
             .replace("\\N", "\n")
@@ -50,6 +59,11 @@ internal object SubtitleSdhFilter {
             .replace("\\h", " ")
         filtered = assTags.replace(filtered, "")
         filtered = htmlTags.replace(filtered, "")
+
+        // Remove narrative speaker prefixes like "الشخص يقول :"
+        filtered = arabicNarrativeSpeakerPrefix.replace(filtered) { match ->
+            match.groups[1]?.value.orEmpty()
+        }
 
         // Remove speaker labels while preserving dialogue dashes
         filtered = speakerLabel.replace(filtered) { match ->
@@ -62,14 +76,23 @@ internal object SubtitleSdhFilter {
         filtered = asterisksSdh.replace(filtered, "")
         filtered = musicSymbols.replace(filtered, "")
 
-        val containsArabic = filtered.any { it in '\u0600'..'\u06FF' || it in '\uFB50'..'\uFEFF' }
+        val containsArabic = isArabicTrack || filtered.any { it in '\u0600'..'\u06FF' || it in '\uFB50'..'\uFEFF' }
 
         return filtered.lines()
-            .map { it.trim() }
+            .map { rawLine ->
+                var line = rawLine.trim()
+                // Clean up dialogue dash with stray punctuation left by SDH removal
+                if (strayDashPunctuation.containsMatchIn(line)) {
+                    line = strayDashPunctuation.replace(line, "- ")
+                } else if (line.startsWith("-") && line.length > 1 && line[1] != ' ') {
+                    line = "- " + line.substring(1).trimStart()
+                }
+                line
+            }
             .filter { line ->
                 if (line.isBlank()) return@filter false
                 // Drop lines that are only dashes or punctuation
-                if (line.all { it.isWhitespace() || it == '-' || it == '—' || it == '–' || it == '*' || it == '.' }) {
+                if (line.all { it.isWhitespace() || it == '-' || it == '—' || it == '–' || it == '*' || it == '.' || it == ':' || it == '،' }) {
                     return@filter false
                 }
                 // Drop subtitle site watermarks

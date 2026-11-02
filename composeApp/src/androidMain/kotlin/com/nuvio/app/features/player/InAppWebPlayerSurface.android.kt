@@ -286,6 +286,9 @@ fun InAppWebPlayerSurface(
     var currentDurationMs by remember { mutableStateOf(0L) }
     var currentPosMs by remember { mutableStateOf(initialPositionMs ?: 0L) }
     var selectedQualityHeight by remember { mutableStateOf(1080) }
+    var currentSubtitleStyle by remember {
+        mutableStateOf(PlayerSettingsRepository.uiState.value.subtitleStyle)
+    }
 
     // External Subtitle rendering state
     val addonSubtitles by SubtitleRepository.addonSubtitles.collectAsStateWithLifecycle()
@@ -379,12 +382,15 @@ fun InAppWebPlayerSurface(
             // Return empty built-in tracks so addonSubtitles are shown cleanly in the Addon section
             override fun getSubtitleTracks(): List<SubtitleTrack> = emptyList()
 
-            override fun getVideoQualityTracks(): List<VideoQualityTrack> =
-                defaultVideoQualityOptions(selectedQualityHeight)
+            override fun getVideoQualityTracks(): List<VideoQualityTrack> = emptyList()
 
             override fun selectVideoQuality(maxHeight: Int) {
                 selectedQualityHeight = maxHeight
                 sendBridgeCommand("quality", maxHeight)
+            }
+
+            override fun applySubtitleStyle(style: SubtitleStyleState) {
+                currentSubtitleStyle = style
             }
 
             override fun applyAudioLanguagePreferences(languages: List<String>) {}
@@ -825,24 +831,31 @@ fun InAppWebPlayerSurface(
         )
 
         // Native Arabic Subtitle overlay when playing inside WebView fallback
-        activeCueText?.takeIf { it.isNotBlank() && hasConfirmedVideoPlayback }?.let { cue ->
+        activeCueText?.takeIf { it.isNotBlank() && hasConfirmedVideoPlayback }?.let { rawCue ->
+            val cue = if (currentSubtitleStyle.stripSdh) {
+                SubtitleSdhFilter.filter(rawCue, isArabicTrack = true)
+            } else {
+                rawCue
+            } ?: return@let
+
+            val displayCue = PlayerSubtitleRtlFix.wrapArabicLines(cue)
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 60.dp, start = 28.dp, end = 28.dp)
+                    .padding(bottom = (currentSubtitleStyle.bottomOffset + 36).dp, start = 28.dp, end = 28.dp)
                     .background(
-                        color = androidx.compose.ui.graphics.Color.Black.copy(alpha = 0.72f),
+                        color = currentSubtitleStyle.backgroundColor,
                         shape = RoundedCornerShape(8.dp)
                     )
                     .padding(horizontal = 14.dp, vertical = 6.dp)
             ) {
                 Text(
-                    text = cue,
-                    color = androidx.compose.ui.graphics.Color.White,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = displayCue.toString(),
+                    color = currentSubtitleStyle.textColor,
+                    fontSize = currentSubtitleStyle.fontSizeSp.sp,
+                    fontWeight = if (currentSubtitleStyle.bold) FontWeight.Bold else FontWeight.Normal,
                     textAlign = TextAlign.Center,
-                    lineHeight = 28.sp,
+                    lineHeight = (currentSubtitleStyle.fontSizeSp * 1.4f).sp,
                 )
             }
         }
